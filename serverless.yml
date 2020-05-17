@@ -7,6 +7,9 @@ provider:
   runtime: go1.x
   region: eu-west-1
   stage: dev
+  environment:
+    SLACK_USER_SECRET: secretgoeshere
+    SLACK_AUTH_TOKEN: tokengoeshere
 
 package:
   exclude:
