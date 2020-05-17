@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -11,7 +14,21 @@ import (
 
 type Response events.APIGatewayProxyResponse
 
+var (
+	ErrMissingEnv = errors.New("SLACK_USER_SECRET and SLACK_AUTH_TOKEN environment variables cannot be empty")
+)
+
 func Handler(ctx context.Context) (Response, error) {
+	fmt.Println("main.Handler")
+
+	slackUserSecret := os.Getenv("SLACK_USER_SECRET")
+	sleckToken := os.Getenv("SLACK_AUTH_TOKEN")
+	fmt.Printf("Configuration loaded: \n\t SLACK_USER_SECRET=%s \n\t SLACK_AUTH_TOKEN=%s", slackUserSecret, sleckToken)
+
+	if len(slackUserSecret) == 0 || len(sleckToken) == 0 {
+		return Response{}, ErrMissingEnv
+	}
+
 	var buf bytes.Buffer
 
 	body, err := json.Marshal(map[string]interface{}{
