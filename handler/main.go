@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,11 +19,22 @@ import (
 type Response events.APIGatewayProxyResponse
 
 var (
-	ErrMissingEnv     = errors.New("SLACK_USER_SECRET and SLACK_AUTH_TOKEN environment variables cannot be empty")
+	ErrMissingEnv     = errors.New("Environment variable cannot be empty")
 	ErrNon200Response = errors.New("Non 200 response found")
 )
 
-func GetUserPresence(userSecret string, token string) error {
+type slackPresenceResponse struct {
+	Ok       string `json:"ok"`
+	Presence string `json:"presence,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+func GetUserPresence(userSecret string, token string) (string, error) {
+	fmt.Println("main.GetUserPresence")
+	if len(userSecret) == 0 || len(token) == 0 {
+		return "", ErrMissingEnv
+	}
+
 	data := url.Values{}
 	data.Add("token", token)
 	data.Add("user", userSecret)
@@ -34,30 +46,42 @@ func GetUserPresence(userSecret string, token string) error {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Cache-Control", "no-cache")
 	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+	resp, _ := client.Do(req)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return ErrNon200Response
+	if resp.StatusCode != http.StatusOK {
+		return "", ErrNon200Response
+	}
+
+	var apiResp slackPresenceResponse
+	buf, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(buf, &apiResp)
+
+	if len(apiResp.Error) != 0 {
+		return "", errors.New(apiResp.Error)
 	}
 
 	fmt.Printf("Response body: %s\n", resp.Body)
-	return nil
+	return apiResp.Presence, nil
 }
 
 func Handler(ctx context.Context) (Response, error) {
 	fmt.Println("main.Handler")
-
 	slackUserSecret := os.Getenv("SLACK_USER_SECRET")
 	sleckToken := os.Getenv("SLACK_AUTH_TOKEN")
 	fmt.Printf("Configuration loaded: \n\t SLACK_USER_SECRET=%s \n\t SLACK_AUTH_TOKEN=%s\n", slackUserSecret, sleckToken)
 
-	if len(slackUserSecret) == 0 || len(sleckToken) == 0 {
-		return Response{}, ErrMissingEnv
+	userPresence, err := GetUserPresence(slackUserSecret, sleckToken)
+
+	var message string
+	if err != nil {
+		message = err.Error()
+	} else {
+		message = fmt.Sprintf("Your friend is: %s", userPresence)
 	}
 
 	var buf bytes.Buffer
 	body, err := json.Marshal(map[string]interface{}{
-		"message": "Go Serverless v1.0! Your function executed successfully!",
+		"message": message,
 	})
 	if err != nil {
 		return Response{StatusCode: 404}, err
