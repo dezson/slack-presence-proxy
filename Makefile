@@ -11,3 +11,6 @@ deploy: clean build
 
 test:
 	sls invoke -f getPresence
+
+remove:
+	sls remove
